@@ -1,3 +1,4 @@
+# app.py
 import streamlit as st
 from transformers import pipeline
 import random
@@ -65,12 +66,11 @@ def get_journals(limit=10):
 # --------------------------
 @st.cache_resource(show_spinner=False)
 def load_chat_model():
-    # This uses the small DialoGPT model which is free and open-source.
     pipe = pipeline("text-generation", model="microsoft/DialoGPT-small")
     return pipe
 
 # --------------------------
-# Psychoeducation content
+# Psychoeducation content (simple)
 # --------------------------
 PSYCHO_TOPICS = {
     "Stress": "Stress is your body's response to challenges. Short breathing breaks, journaling, and talking to someone can help.",
@@ -87,7 +87,7 @@ HELPLINES = {
     "India (NIMHANS)": "080-4611-0007",
     "iCall India": "+91 9152987821",
     "US (988)": "988",
-    "International": "Contact local emergency services / national lifeline"
+    "International (if available)": "Contact local emergency services / national lifeline"
 }
 
 # --------------------------
@@ -99,9 +99,17 @@ def main():
     st.title("🌱 Youth Wellness AI — Free Prototype")
     st.markdown("A privacy-first, youth-friendly AI companion (prototype). *This is not a therapist.* For emergencies, contact local services.")
 
-    # Sidebar Navigation
-    st.sidebar.header("Navigation")
-    page = st.sidebar.radio("", ["Home", "Mood Check-In", "AI Chatbot", "Well-being Toolkit", "Psychoeducation", "Journals", "About / Export"])
+    # Sidebar Navigation with session state
+    if "nav_page" not in st.session_state:
+        st.session_state["nav_page"] = "Home"
+
+    pages = ["Home", "Mood Check-In", "AI Chatbot", "Well-being Toolkit", "Psychoeducation", "Journals", "About / Export"]
+    page = st.sidebar.radio(
+        "",
+        pages,
+        index=pages.index(st.session_state["nav_page"])
+    )
+    st.session_state["nav_page"] = page
 
     # ---- Home ----
     if page == "Home":
@@ -115,15 +123,13 @@ def main():
             - Journaling & local saving
             - Crisis detection and helplines
         """)
-        st.info("Privacy: All data is stored locally in this app (SQLite). No external APIs are used by default.")
+        st.info("Privacy: All data is stored locally in this app (SQLite). No external APIs are used by default (free model).")
 
         st.markdown("### Quick actions")
         if st.button("Mood Check-In"):
-            st.session_state.page = "Mood Check-In"
-            st.experimental_rerun()
+            st.session_state["nav_page"] = "Mood Check-In"
         if st.button("Open AI Chatbot"):
-            st.session_state.page = "AI Chatbot"
-            st.experimental_rerun()
+            st.session_state["nav_page"] = "AI Chatbot"
 
     # ---- Mood Check-In ----
     elif page == "Mood Check-In":
@@ -161,22 +167,18 @@ def main():
             if not user_input.strip():
                 st.warning("Please type something before sending.")
             else:
-                # Crisis detection
                 low = user_input.lower()
                 if any(k in low for k in CRISIS_KEYWORDS):
                     st.error("⚠ It looks like you may be in crisis or feeling unsafe. Please reach out to a helpline or trusted person immediately.")
                     for name, num in HELPLINES.items():
                         st.write(f"**{name}** — {num}")
                     st.write("If you are in immediate danger, contact emergency services in your country.")
-                else:
-                    with st.spinner("AI is thinking..."):
-                        result = chat_model(user_input, max_length=80, do_sample=True, top_k=50)
-                        gen = result[0]["generated_text"]
-                        reply = gen[len(user_input):].strip()
-                        if not reply:
-                            reply = gen
-                        st.session_state.chat_history.append(("You", user_input))
-                        st.session_state.chat_history.append(("AI", reply))
+                with st.spinner("AI is thinking..."):
+                    result = chat_model(user_input, max_length=80, do_sample=True, top_k=50)
+                    gen = result[0]["generated_text"]
+                    reply = gen[len(user_input):].strip() or gen
+                    st.session_state.chat_history.append(("You", user_input))
+                    st.session_state.chat_history.append(("AI", reply))
 
         if st.session_state.chat_history:
             st.subheader("Conversation")
@@ -272,7 +274,6 @@ def main():
         if st.button("Show database file path"):
             st.write(f"Database path: {DB_PATH} — you can open it with any SQLite viewer.")
         st.write("If you want to export data to CSV, run the following in the terminal or write a small script; data is stored in youth_wellness.db.")
-
 
 if __name__ == "__main__":
     main()
