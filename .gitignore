@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+.venv/
+youth_wellness.db
