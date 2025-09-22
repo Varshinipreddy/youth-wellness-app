@@ -1,4 +1,3 @@
-# app.py
 import streamlit as st
 from transformers import pipeline
 import random
@@ -67,12 +66,11 @@ def get_journals(limit=10):
 @st.cache_resource(show_spinner=False)
 def load_chat_model():
     # This uses the small DialoGPT model which is free and open-source.
-    # It will download the model to disk (may take a minute the first time).
     pipe = pipeline("text-generation", model="microsoft/DialoGPT-small")
     return pipe
 
 # --------------------------
-# Psychoeducation content (simple)
+# Psychoeducation content
 # --------------------------
 PSYCHO_TOPICS = {
     "Stress": "Stress is your body's response to challenges. Short breathing breaks, journaling, and talking to someone can help.",
@@ -89,7 +87,7 @@ HELPLINES = {
     "India (NIMHANS)": "080-4611-0007",
     "iCall India": "+91 9152987821",
     "US (988)": "988",
-    "International (if available)": "Contact local emergency services / national lifeline"
+    "International": "Contact local emergency services / national lifeline"
 }
 
 # --------------------------
@@ -117,14 +115,14 @@ def main():
             - Journaling & local saving
             - Crisis detection and helplines
         """)
-        st.info("Privacy: All data is stored locally in this app (SQLite). No external APIs are used by default (free model).")
+        st.info("Privacy: All data is stored locally in this app (SQLite). No external APIs are used by default.")
 
         st.markdown("### Quick actions")
         if st.button("Mood Check-In"):
-            st.experimental_set_query_params(_page="Mood Check-In")
+            st.session_state.page = "Mood Check-In"
             st.experimental_rerun()
         if st.button("Open AI Chatbot"):
-            st.experimental_set_query_params(_page="AI Chatbot")
+            st.session_state.page = "AI Chatbot"
             st.experimental_rerun()
 
     # ---- Mood Check-In ----
@@ -153,7 +151,6 @@ def main():
         st.write("This uses a free-weights model (DialoGPT-small). Responses are supportive but may be less fluent than paid models.")
         chat_model = load_chat_model()
 
-        # small session state for chat history
         if "chat_history" not in st.session_state:
             st.session_state.chat_history = []
 
@@ -169,25 +166,18 @@ def main():
                 if any(k in low for k in CRISIS_KEYWORDS):
                     st.error("⚠ It looks like you may be in crisis or feeling unsafe. Please reach out to a helpline or trusted person immediately.")
                     for name, num in HELPLINES.items():
-                        st.write(f"{name}** — {num}")
+                        st.write(f"**{name}** — {num}")
                     st.write("If you are in immediate danger, contact emergency services in your country.")
-                # generate reply
-                with st.spinner("AI is thinking..."):
-                    # Use the text-generation pipeline with a small max length.
-                    # We pass the user input as prompt; model will generate a continuation.
-                    result = chat_model(user_input, max_length=80, do_sample=True, top_k=50)
-                    gen = result[0]["generated_text"]
-                    # model's generated_text often contains the prompt + reply
-                    # attempt to extract reply portion:
-                    reply = gen[len(user_input):].strip()
-                    if not reply:
-                        # fallback if extraction failed
-                        reply = gen
-                    # save to session history
-                    st.session_state.chat_history.append(("You", user_input))
-                    st.session_state.chat_history.append(("AI", reply))
+                else:
+                    with st.spinner("AI is thinking..."):
+                        result = chat_model(user_input, max_length=80, do_sample=True, top_k=50)
+                        gen = result[0]["generated_text"]
+                        reply = gen[len(user_input):].strip()
+                        if not reply:
+                            reply = gen
+                        st.session_state.chat_history.append(("You", user_input))
+                        st.session_state.chat_history.append(("AI", reply))
 
-        # show chat history
         if st.session_state.chat_history:
             st.subheader("Conversation")
             for speaker, text in st.session_state.chat_history[-10:]:
@@ -203,7 +193,6 @@ def main():
         st.header("🌸 Well-being Toolkit")
         st.write("Quick tools to help calm and reset.")
 
-        # Daily tip card
         st.subheader("Daily Tip")
         tips = [
             "Take 5 deep breaths slowly.",
@@ -215,16 +204,13 @@ def main():
         if st.button("Show me a tip"):
             st.info(random.choice(tips))
 
-        # Breathing exercise with simple progress bar
         st.subheader("Breathing Exercise (box breathing — 1 cycle: 4s inhale, 4s hold, 4s exhale, 4s hold)")
         if st.button("Start 1-minute breathing"):
             total_seconds = 60
             t0 = time.time()
             prog = st.progress(0)
             status = st.empty()
-            i = 0
             while time.time() - t0 < total_seconds:
-                i += 1
                 elapsed = time.time() - t0
                 prog.progress(int((elapsed / total_seconds) * 100))
                 phase = int((elapsed % 16) // 4)
@@ -240,7 +226,6 @@ def main():
             prog.progress(100)
             status.success("Great — one minute done. How do you feel now?")
 
-        # Gratitude journal quick save
         st.subheader("Gratitude / Quick Journal")
         g = st.text_area("Write one thing you're grateful for (or any quick note)", height=100)
         if st.button("Save Note"):
@@ -287,6 +272,7 @@ def main():
         if st.button("Show database file path"):
             st.write(f"Database path: {DB_PATH} — you can open it with any SQLite viewer.")
         st.write("If you want to export data to CSV, run the following in the terminal or write a small script; data is stored in youth_wellness.db.")
+
 
 if __name__ == "__main__":
     main()
